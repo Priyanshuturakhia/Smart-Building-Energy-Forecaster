@@ -5,7 +5,7 @@ import numpy as np
 import joblib
 
 # --- 1. SET PAGE CONFIG (Sets browser tab title and icon) ---
-st.set_page_config(page_title="Smart Building Energy Forecaster", page_icon="💡")
+st.set_page_config(page_title="PeakGuard AI", page_icon="💡")
 
 
 # --- 2. LOAD YOUR MODEL AND FILES (at startup) ---
@@ -59,7 +59,7 @@ with st.sidebar:
         "💡 **Note:** This model is designed for commercial properties and may not be accurate for single-family homes.")
 
 # --- Main Page Title ---
-st.title("💡 Smart Building Energy Forecaster")
+st.title("💡 PeakGuard AI")
 st.write("Enter the building's current conditions to forecast its energy consumption for the next hour.")
 
 # --- Prediction Output Area ---
@@ -108,4 +108,5 @@ if submit_button:
     prediction_output.metric(
         label="Predicted Energy Consumption",
         value=f"{prediction:.2f} kWh"
+
     )
