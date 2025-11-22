@@ -275,61 +275,78 @@ def classify_peak_status(pred_kwh: float, contract_limit_kw: float) -> tuple[str
 
 
 def generate_ai_recommendations(
-    status: str,
-    delta_kw: float,
+    forecast_kwh: float,
+    contract_limit_kw: float,
     solar_kw: float,
-    grid_without_solar_kwh: float,
-    grid_with_solar_kwh: float,
+    grid_emission_factor: float,
+    grid_without_solar: float,
+    grid_with_solar: float,
     co2_avoided_kg: float,
 ) -> list[str]:
-    """Produce 2–4 short scenario-specific recommendations."""
-
     recs: list[str] = []
 
-    if "BREACH" in status:
-        recs.append(
-            f"Forecast is ~{delta_kw:.1f} kW above your contract limit. "
-            "Pre-cool/pre-heat and stagger large loads 1–2 hours before this time window."
-        )
-        if solar_kw <= 0.1:
+    # Contract status
+    if contract_limit_kw > 0:
+        diff = forecast_kwh - contract_limit_kw
+        pct_over = (diff / contract_limit_kw) * 100 if contract_limit_kw else 0
+
+        if diff > 0:
             recs.append(
-                "Add at least a small on-site solar capacity in the model to test how much peak clipping you could get."
+                f"⚠️ Forecast is **{diff:.1f} kW above** contract peak. "
+                f"Shift non-critical loads (EV charging, pumps, chilled water) "
+                f"out of this hour or pre-cool by 1–2°C in the previous hours."
+            )
+            if pct_over > 10:
+                recs.append(
+                    "📈 Consider **renegotiating a higher contract peak** for this season "
+                    "or adding on-site storage (battery / thermal) to shave peaks."
+                )
+        elif diff > -0.1 * contract_limit_kw:
+            recs.append(
+                f"🟡 You’re within **10% of contract**. Put the building on a "
+                "temporary ‘demand guard’ mode (tighten set-points, pause non-essential loads)."
             )
         else:
             recs.append(
-                f"Increase active solar use around this hour. Even +20–30% solar could cut {abs(delta_kw):.1f} kW of peak draw."
+                "✅ You are **comfortably below** contract peak. This is a good slot for "
+                "running energy-intensive tasks."
             )
-    elif "SAFE" in status:
+
+    # Solar and CO₂
+    if solar_kw > 0:
+        if co2_avoided_kg > 0.1:
+            recs.append(
+                f"🌞 With **{solar_kw:.0f} kW** solar, you avoid about **{co2_avoided_kg:.1f} kg CO₂** in this hour. "
+                "Highlight this as a concrete sustainability win in your demo."
+            )
+        else:
+            recs.append(
+                "🌞 Solar is configured but not helping much in this hour "
+                "(probably low load or low irradiance). Show another scenario "
+                "where solar cuts a visible chunk of grid draw."
+            )
+    else:
         recs.append(
-            f"Forecast stays ~{abs(delta_kw):.1f} kW under your contract limit. "
-            "You can safely shift some flexible loads into this hour without penalty."
+            "🌱 Try setting a non-zero **on-site solar capacity (kW)** and re-run. "
+            "That instantly demonstrates how renewables shave peaks and reduce CO₂."
         )
 
-    if co2_avoided_kg > 0.05:
+    # Emission factor sanity check
+    if grid_emission_factor <= 0.1:
         recs.append(
-            f"This scenario already avoids ~{co2_avoided_kg:.1f} kg CO₂ this hour. "
-            "Use these numbers in your sustainability reports and dashboards."
+            "ℹ️ Your grid emission factor looks very low. For Indian grids, "
+            "a value in the **0.7–0.9 kg CO₂/kWh** range is more realistic – "
+            "double-check the number before presenting."
         )
 
-    reduction_pct = (
-        0.0
-        if grid_without_solar_kwh <= 0
-        else 100.0 * (grid_without_solar_kwh - grid_with_solar_kwh) / grid_without_solar_kwh
+    # Generic scenario suggestion
+    recs.append(
+        "🧪 In the demo, run **two back-to-back scenarios**: "
+        "first with today’s settings, then reduce contract peak or increase solar. "
+        "Let the cards + chart show how grid draw and CO₂ respond."
     )
-    if reduction_pct >= 5:
-        recs.append(
-            f"Solar cuts grid draw by ~{reduction_pct:.1f}%. "
-            "Consider combining this with demand response or battery storage for deeper peak shaving."
-        )
 
-    if not recs:
-        recs.append(
-            "Try running scenarios with different contract limits, solar capacity and weather conditions "
-            "to discover when your building is most at risk of peak penalties."
-        )
-
-    return recs[:4]
-
+    return recs
 
 # ---------------------------------------------------------
 # 5. SIDEBAR – SETUP
@@ -710,3 +727,4 @@ else:
         "</div>",
         unsafe_allow_html=True,
     )
+
