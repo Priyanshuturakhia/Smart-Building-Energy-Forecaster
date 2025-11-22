@@ -702,15 +702,14 @@ if run_btn:
 
     # AI Recommendations box
     recs = generate_ai_recommendations(
-    forecast_kwh=forecast_kwh,
-    contract_limit_kw=contract_peak_limit,
-    solar_kw=solar_capacity_kw,
-    grid_emission_factor=grid_emission_factor,
-    grid_without_solar=grid_without_solar,
-    grid_with_solar=grid_with_solar,
-    co2_avoided_kg=co2_avoided,
-)
-
+        forecast_kwh=pred_kwh,
+        contract_limit_kw=contract_peak_limit_kw,
+        solar_kw=onsite_solar_kw,
+        grid_emission_factor=grid_emission_factor,
+        grid_without_solar=grid_without_solar_kwh,
+        grid_with_solar=grid_with_solar_kwh,
+        co2_avoided_kg=co2_avoided,
+    )
 
     st.markdown("### 🤖 AI recommendations for this hour")
 
@@ -721,6 +720,7 @@ if run_btn:
         unsafe_allow_html=True,
     )
 
+
 else:
     st.markdown(
         "<div class='section-subtitle' style='margin-top:0.6rem;'>"
@@ -729,5 +729,6 @@ else:
         "</div>",
         unsafe_allow_html=True,
     )
+
 
 
