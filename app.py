@@ -1,115 +1,162 @@
-import datetime
-import math
+# app.py  -- PeakGuard AI (Green theme, upgraded)
 
-import joblib
+import datetime as dt
+import requests
+
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
-import requests
 import streamlit as st
+import joblib
 
-# =========================================================
-# 1. PAGE CONFIG & THEME (GREEN – SUSTAINABILITY FOCUS)
-# =========================================================
+# ---------------------------------------------------------
+# 1. PAGE CONFIG + THEME
+# ---------------------------------------------------------
 st.set_page_config(
     page_title="PeakGuard AI – Smart Green Building Forecaster",
-    page_icon="🌱",
+    page_icon="🌿",
     layout="wide",
 )
 
-
-def inject_green_theme():
-    """Inject a simple green, modern theme via CSS."""
-    st.markdown(
-        """
-        <style>
-        /* Page background */
+# Custom dark-green theme
+st.markdown(
+    """
+    <style>
+        /* Global */
         .stApp {
-            background: radial-gradient(circle at top left, #0f5132 0, #020b07 55%, #000000 100%);
-            color: #f5f5f5;
+            background: radial-gradient(circle at top left, #123726 0, #020608 40%, #020304 100%);
+            color: #f4f7f5;
+            font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
 
         /* Sidebar */
         section[data-testid="stSidebar"] {
-            background: linear-gradient(180deg, #052e25 0%, #02130e 100%);
-            border-right: 1px solid rgba(255, 255, 255, 0.06);
+            background: #061611;
+            border-right: 1px solid rgba(120, 255, 180, 0.25);
         }
-
-        /* Cards look for metrics */
-        div[data-testid="stMetric"] {
-            background: rgba(0, 0, 0, 0.35);
-            border-radius: 12px;
-            padding: 12px;
-            border: 1px solid rgba(0, 255, 153, 0.35);
-        }
-
-        /* Headers */
-        h1, h2, h3, h4 {
-            color: #e9fff5 !important;
+        section[data-testid="stSidebar"] h2, 
+        section[data-testid="stSidebar"] h3 {
+            color: #e5fff1;
         }
 
         /* Inputs */
         .stTextInput > div > div > input,
-        .stNumberInput input,
-        .stSelectbox div[data-baseweb="select"],
-        .stDateInput input,
-        .stTimeInput input {
-            background-color: rgba(3, 25, 20, 0.9) !important;
-            color: #e9fff5 !important;
-            border-radius: 8px !important;
+        .stNumberInput > div > div > input,
+        .stSelectbox > div > div,
+        .stDateInput > div > div > input,
+        .stTimeInput > div > div > input {
+            background-color: #071710 !important;
+            color: #f4f7f5 !important;
+            border-radius: 0.4rem !important;
+            border: 1px solid rgba(140, 255, 200, 0.2) !important;
         }
 
         /* Buttons */
-        .stButton>button {
-            background: linear-gradient(135deg, #22c55e, #4ade80);
-            color: #02110b;
+        .stButton > button {
+            background: linear-gradient(90deg, #18a34a, #16c47f);
+            color: #04110b;
             border-radius: 999px;
-            border: none;
-            padding: 0.45rem 1.4rem;
+            padding: 0.6rem 1.8rem;
             font-weight: 600;
+            border: none;
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.3), 0 10px 25px rgba(0, 255, 150, 0.25);
         }
-        .stButton>button:hover {
-            filter: brightness(1.05);
-            box-shadow: 0 0 12px rgba(34, 197, 94, 0.6);
+        .stButton > button:hover {
+            filter: brightness(1.08);
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.4), 0 12px 30px rgba(0, 255, 180, 0.3);
         }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
 
+        /* Metric cards */
+        div[data-testid="stMetric"] {
+            background: rgba(6, 28, 19, 0.9);
+            padding: 0.9rem 1.1rem;
+            border-radius: 0.9rem;
+            border: 1px solid rgba(72, 214, 134, 0.45);
+        }
 
-inject_green_theme()
+        /* Section titles */
+        .section-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+        .section-subtitle {
+            font-size: 0.9rem;
+            opacity: 0.75;
+        }
 
-# =========================================================
+        /* Tiny badges */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            padding: 0.12rem 0.65rem;
+            border-radius: 999px;
+            font-size: 0.65rem;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+        }
+        .badge-peak {
+            background: rgba(255, 99, 132, 0.14);
+            color: #ff9ba8;
+        }
+        .badge-green {
+            background: rgba(72, 214, 134, 0.18);
+            color: #8bffd1;
+        }
+
+        /* Cards */
+        .glass-card {
+            background: radial-gradient(circle at top left, rgba(40, 120, 93, 0.65), rgba(5,12,10,0.9));
+            border-radius: 1.05rem;
+            padding: 1.2rem 1.4rem;
+            border: 1px solid rgba(120, 255, 190, 0.35);
+            box-shadow: 0 18px 50px rgba(0,0,0,0.55);
+        }
+
+        .sub-card {
+            background: rgba(3,14,9,0.8);
+            border-radius: 0.9rem;
+            padding: 0.9rem 1.0rem;
+            border: 1px solid rgba(95, 220, 160, 0.35);
+        }
+
+        .ai-rec {
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+        .ai-rec li {
+            margin-bottom: 0.25rem;
+        }
+
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ---------------------------------------------------------
 # 2. LOAD MODEL + FEATURES
-# =========================================================
-
-
-@st.cache_resource(show_spinner=False)
-def load_model_and_files():
-    """
-    Load trained LightGBM model and feature list.
-    Expects:
-        - lgbm_model.txt
-        - feature_names.pkl
-    """
+# ---------------------------------------------------------
+@st.cache_resource
+def load_model_and_metadata():
     model = lgb.Booster(model_file="lgbm_model.txt")
-    model_features = joblib.load("feature_names.pkl")
-    all_primary_uses = [
+    feature_names = joblib.load("feature_names.pkl")
+    # infer valid primary_use categories from feature names
+    primary_uses = [
         col.replace("primary_use_", "")
-        for col in model_features
+        for col in feature_names
         if col.startswith("primary_use_")
     ]
-    return model, model_features, all_primary_uses
+    return model, feature_names, primary_uses
 
 
-model, model_features, all_primary_uses = load_model_and_files()
+model, MODEL_FEATURES, ALL_PRIMARY_USES = load_model_and_metadata()
 
 
-# =========================================================
-# 3. FEATURE ENGINEERING
-# =========================================================
-def create_features_from_input(
+# ---------------------------------------------------------
+# 3. FEATURE ENGINEERING – must match training logic
+# ---------------------------------------------------------
+def build_feature_row(
     air_temp: float,
     hour: int,
     day_of_week: int,
@@ -119,399 +166,547 @@ def create_features_from_input(
     year_built: int,
     lag1: float,
     lag24: float,
-):
-    """
-    Build a single-row dataframe matching the model's training features.
-    """
-    input_data = {
-        "air_temperature": air_temp,
-        "square_feet": square_feet,
-        "year_built": year_built,
-        "month": month,
-        "meter_reading_lag1": lag1,
-        "meter_reading_lag24": lag24,
+) -> pd.DataFrame:
+    """Create a single feature row compatible with the LightGBM model."""
+
+    data = {
+        "air_temperature": float(air_temp),
+        "square_feet": float(square_feet),
+        "year_built": int(year_built),
+        "month": int(month),
+        "meter_reading_lag1": float(lag1),
+        "meter_reading_lag24": float(lag24),
     }
 
-    # Heating / Cooling degree days
-    input_data["hdd"] = max(0.0, 18.0 - air_temp)
-    input_data["cdd"] = max(0.0, air_temp - 21.0)
+    # Heating / Cooling degree-days
+    data["hdd"] = max(0.0, 18.0 - air_temp)   # base 18°C
+    data["cdd"] = max(0.0, air_temp - 21.0)   # base 21°C
 
-    # Time cyclic encodings
-    input_data["hour_sin"] = math.sin(2 * math.pi * hour / 24.0)
-    input_data["hour_cos"] = math.cos(2 * math.pi * hour / 24.0)
-    input_data["day_of_week_sin"] = math.sin(2 * math.pi * day_of_week / 7.0)
-    input_data["day_of_week_cos"] = math.cos(2 * math.pi * day_of_week / 7.0)
+    # Time encodings – cyclical
+    data["hour_sin"] = np.sin(2 * np.pi * hour / 24.0)
+    data["hour_cos"] = np.cos(2 * np.pi * hour / 24.0)
+    data["day_of_week_sin"] = np.sin(2 * np.pi * day_of_week / 7.0)
+    data["day_of_week_cos"] = np.cos(2 * np.pi * day_of_week / 7.0)
 
     # One-hot primary_use
-    for use in all_primary_uses:
-        input_data[f"primary_use_{use}"] = 1 if use == primary_use else 0
+    for use in ALL_PRIMARY_USES:
+        data[f"primary_use_{use}"] = 1 if use == primary_use else 0
 
-    # Any missing features from training get 0 by default
-    df = pd.DataFrame([input_data])
-    df = df.reindex(columns=model_features, fill_value=0)
+    df = pd.DataFrame([data])
+    # Reindex to exact model feature order
+    df = df.reindex(columns=MODEL_FEATURES, fill_value=0)
     return df
 
 
-# =========================================================
-# 4. WEATHER API (REAL-TIME)
-# =========================================================
-@st.cache_data(show_spinner=False)
-def fetch_weather_for_now(latitude: float, longitude: float):
-    """
-    Fetch current-hour temperature using Open-Meteo (no API key required).
-    Returns (air_temp_c, hour, day_of_week, month)
-    """
+# ---------------------------------------------------------
+# 4. WEATHER + SOLAR HELPERS
+# ---------------------------------------------------------
+def fetch_live_temperature(lat: float, lon: float, when: dt.datetime) -> float | None:
+    """Open-Meteo API – returns outdoor temp in °C for given datetime, or None."""
     try:
-        url = "https://api.open-meteo.com/v1/forecast"
-        params = {
-            "latitude": latitude,
-            "longitude": longitude,
-            "hourly": "temperature_2m",
-            "timezone": "auto",
-        }
-        resp = requests.get(url, params=params, timeout=6)
+        base_url = "https://api.open-meteo.com/v1/forecast"
+        date_str = when.date().isoformat()
+        resp = requests.get(
+            base_url,
+            params={
+                "latitude": lat,
+                "longitude": lon,
+                "hourly": "temperature_2m",
+                "start_date": date_str,
+                "end_date": date_str,
+                "timezone": "auto",
+            },
+            timeout=6,
+        )
         resp.raise_for_status()
         data = resp.json()
-
-        times = data["hourly"]["time"]
-        temps = data["hourly"]["temperature_2m"]
-
-        # Take the first hour >= now in the API's timezone
-        now = datetime.datetime.now()
-        # Times are ISO strings like "2025-11-23T14:00"
-        best_idx = 0
-        best_diff = None
-        for i, t in enumerate(times):
-            ts = datetime.datetime.fromisoformat(t)
-            diff = abs((ts - now).total_seconds())
-            if best_diff is None or diff < best_diff:
-                best_diff = diff
-                best_idx = i
-
-        ts = datetime.datetime.fromisoformat(times[best_idx])
-        temp_c = float(temps[best_idx])
-
-        hour = ts.hour
-        day_of_week = ts.weekday()  # Monday=0
-        month = ts.month
-        return temp_c, hour, day_of_week, month
-    except Exception as e:
-        # Fail gracefully – caller will show a warning
-        return None, None, None, None
+        temps = data.get("hourly", {}).get("temperature_2m")
+        times = data.get("hourly", {}).get("time")
+        if not temps or not times:
+            return None
+        target_iso = when.replace(minute=0, second=0, microsecond=0).isoformat(timespec="hours")
+        # times from API are "YYYY-MM-DDTHH:00"
+        try:
+            idx = times.index(target_iso)
+            return float(temps[idx])
+        except ValueError:
+            return None
+    except Exception:
+        return None
 
 
-# =========================================================
-# 5. SOLAR GENERATION + CO₂ LOGIC
-# =========================================================
-def estimate_solar_generation_kwh(solar_capacity_kw: float, hour: int) -> float:
+def estimate_solar_generation_kw(
+    onsite_capacity_kw: float, hour: int
+) -> float:
     """
-    Very simple static solar profile:
-    - 0 kWh outside [6, 18]
-    - Peaks around 12–13
+    Rough solar profile:
+    - 0 output at night
+    - triangular peak around 12:00
+    - this is intentionally simple for demo visualization.
     """
-    if solar_capacity_kw <= 0:
+    if onsite_capacity_kw <= 0:
         return 0.0
 
     if hour < 6 or hour > 18:
         return 0.0
 
-    # Triangular shape peaking at noon (12:00)
-    peak_hour = 12
-    span = 6  # from 6 to 18
-    factor = max(0.0, 1.0 - abs(hour - peak_hour) / span)
-    # Assume each kW produces ~factor kWh in that hour (oversimplified but fine for demo)
-    return solar_capacity_kw * factor
+    # hour 6 -> factor 0; 12 -> 1; 18 -> 0 (triangle)
+    factor = max(0.0, 1.0 - abs(hour - 12) / 6.0)
+    return onsite_capacity_kw * factor  # kWh for 1-hour interval
 
 
-def compute_co2(energy_kwh: float, emission_factor_kg_per_kwh: float) -> float:
-    return max(0.0, energy_kwh) * max(0.0, emission_factor_kg_per_kwh)
+def classify_peak_status(pred_kwh: float, contract_limit_kw: float) -> tuple[str, float]:
+    """
+    Compare predicted consumption vs contract limit.
+    Returns (status_label, delta).
+    delta > 0  -> amount ABOVE limit
+    delta <= 0 -> remaining headroom
+    """
+    if contract_limit_kw <= 0:
+        return "No limit set", 0.0
+
+    delta = pred_kwh - contract_limit_kw
+    if delta > 0:
+        return "BREACH – forecast exceeds contract peak", delta
+    elif abs(delta) < 1e-6:
+        return "AT LIMIT – exactly at contract peak", 0.0
+    else:
+        return "SAFE – below contract peak", delta
 
 
-# =========================================================
-# 6. SIDEBAR – BUILDING, CONTRACT, SUSTAINABILITY
-# =========================================================
+def generate_ai_recommendations(
+    status: str,
+    delta_kw: float,
+    solar_kw: float,
+    grid_without_solar_kwh: float,
+    grid_with_solar_kwh: float,
+    co2_avoided_kg: float,
+) -> list[str]:
+    """Produce 2–4 short scenario-specific recommendations."""
+
+    recs: list[str] = []
+
+    if "BREACH" in status:
+        recs.append(
+            f"Forecast is ~{delta_kw:.1f} kW above your contract limit. "
+            "Pre-cool/pre-heat and stagger large loads 1–2 hours before this time window."
+        )
+        if solar_kw <= 0.1:
+            recs.append(
+                "Add at least a small on-site solar capacity in the model to test how much peak clipping you could get."
+            )
+        else:
+            recs.append(
+                f"Increase active solar use around this hour. Even +20–30% solar could cut {abs(delta_kw):.1f} kW of peak draw."
+            )
+    elif "SAFE" in status:
+        recs.append(
+            f"Forecast stays ~{abs(delta_kw):.1f} kW under your contract limit. "
+            "You can safely shift some flexible loads into this hour without penalty."
+        )
+
+    if co2_avoided_kg > 0.05:
+        recs.append(
+            f"This scenario already avoids ~{co2_avoided_kg:.1f} kg CO₂ this hour. "
+            "Use these numbers in your sustainability reports and dashboards."
+        )
+
+    reduction_pct = (
+        0.0
+        if grid_without_solar_kwh <= 0
+        else 100.0 * (grid_without_solar_kwh - grid_with_solar_kwh) / grid_without_solar_kwh
+    )
+    if reduction_pct >= 5:
+        recs.append(
+            f"Solar cuts grid draw by ~{reduction_pct:.1f}%. "
+            "Consider combining this with demand response or battery storage for deeper peak shaving."
+        )
+
+    if not recs:
+        recs.append(
+            "Try running scenarios with different contract limits, solar capacity and weather conditions "
+            "to discover when your building is most at risk of peak penalties."
+        )
+
+    return recs[:4]
+
+
+# ---------------------------------------------------------
+# 5. SIDEBAR – SETUP
+# ---------------------------------------------------------
 with st.sidebar:
     st.markdown("### 🌱 PeakGuard AI – Setup")
 
-    st.markdown("**1. Building profile**")
-    primary_use = st.selectbox("Primary building use", options=all_primary_uses)
-    square_feet = st.number_input(
-        "Building size (sq. ft.)", min_value=1_000, max_value=1_000_000, value=50_000, step=1_000
+    # 1. Building profile
+    st.markdown("#### 1. Building profile")
+    primary_use = st.selectbox(
+        "Primary building use",
+        options=ALL_PRIMARY_USES,
+        index=ALL_PRIMARY_USES.index("Education") if "Education" in ALL_PRIMARY_USES else 0,
+        key="sb_primary_use",
     )
+
+    square_feet = st.number_input(
+        "Building size (sq. ft.)",
+        min_value=1000,
+        max_value=1_000_000,
+        value=50_000,
+        step=1_000,
+        key="sb_sqft",
+    )
+
     year_built = st.number_input(
-        "Year built", min_value=1900, max_value=datetime.datetime.now().year, value=2005, step=1
+        "Year built",
+        min_value=1900,
+        max_value=dt.date.today().year,
+        value=2005,
+        step=1,
+        key="sb_year_built",
     )
 
     st.markdown("---")
-    st.markdown("**2. Contract & emissions**")
-    contract_peak_limit = st.number_input(
+
+    # 2. Contract & emissions
+    st.markdown("#### 2. Contract & emissions")
+
+    contract_peak_limit_kw = st.number_input(
         "Contract Peak Limit (kW)",
         min_value=0.0,
-        max_value=10000.0,
+        max_value=100000.0,
         value=500.0,
         step=10.0,
-        help="Your utility's contracted maximum demand. For 1-hour intervals, kW ≈ kWh.",
+        key="sb_contract_limit",
     )
-    emission_factor = st.number_input(
+
+    grid_emission_factor = st.number_input(
         "Grid emission factor (kg CO₂ per kWh)",
         min_value=0.0,
-        max_value=2.0,
-        value=0.82,  # approx India grid
+        max_value=5.0,
+        value=0.82,
         step=0.01,
-        help="Ask sustainability/utility team if you want an exact value.",
+        key="sb_emission_factor",
+        help="Approximate kg of CO₂ emitted by the grid per kWh consumed.",
     )
 
     st.markdown("---")
-    st.markdown("**3. Solar integration**")
-    solar_capacity_kw = st.number_input(
+
+    # 3. Solar integration
+    st.markdown("#### 3. Solar integration")
+
+    onsite_solar_kw = st.number_input(
         "On-site solar capacity (kW)",
         min_value=0.0,
-        max_value=5000.0,
+        max_value=100000.0,
         value=0.0,
         step=10.0,
-        help="Set to 0 if the building has no solar.",
+        key="sb_solar_capacity",
     )
 
-    st.markdown("---")
-    st.markdown("**4. Live weather (optional)**")
-    use_live_weather = st.checkbox("Use real-time weather API", value=False)
-    latitude = st.number_input("Latitude", min_value=-90.0, max_value=90.0, value=23.0, step=0.1)
-    longitude = st.number_input("Longitude", min_value=-180.0, max_value=180.0, value=72.0, step=0.1)
-
-    if use_live_weather:
-        if st.button("Fetch current weather"):
-            temp_c, hour_api, dow_api, month_api = fetch_weather_for_now(latitude, longitude)
-            if temp_c is None:
-                st.error("Couldn't fetch weather. Check your internet connection.")
-            else:
-                # Store in session_state so the main form can pick it up
-                st.session_state["live_air_temp"] = temp_c
-                st.session_state["live_hour"] = hour_api
-                st.session_state["live_day_of_week"] = dow_api
-                st.session_state["live_month"] = month_api
-                st.success(
-                    f"Weather loaded – {temp_c:.1f} °C at {hour_api:02d}:00, "
-                    f"Day {dow_api} (0=Mon) Month {month_api}"
-                )
+    st.caption("Tip: Set a non-zero solar capacity to showcase peak shaving "
+               "and CO₂ avoidance in your Sustainathon demo.")
 
     st.markdown("---")
-    st.caption("Tip: Use live weather + solar to showcase *real* green impact in your demo.")
 
+    # 4. Live weather (optional)
+    st.markdown("#### 4. Live weather (optional)")
+    use_live_weather = st.checkbox(
+        "Use real-time weather API",
+        value=False,
+        key="sb_use_live_weather",
+    )
 
-# =========================================================
-# 7. MAIN LAYOUT – TABS
-# =========================================================
-st.title("🌱 PeakGuard AI – Smart Green Building Forecaster")
+    latitude = st.number_input(
+        "Latitude",
+        min_value=-90.0,
+        max_value=90.0,
+        value=23.0,
+        step=0.1,
+        key="sb_latitude",
+    )
+    longitude = st.number_input(
+        "Longitude",
+        min_value=-180.0,
+        max_value=180.0,
+        value=72.0,
+        step=0.1,
+        key="sb_longitude",
+    )
 
-tab_forecast, tab_howto = st.tabs(["⚡ Forecast & Scenarios", "📘 How to use App"])
-
+    st.caption(
+        "Use live weather + solar to showcase **real** green impact in your demo."
+    )
 
 # ---------------------------------------------------------
-# TAB 1 – FORECAST & SCENARIOS
+# 6. MAIN LAYOUT – INPUTS
 # ---------------------------------------------------------
-with tab_forecast:
-    st.subheader("Set operating conditions")
+st.markdown(
+    "<div class='glass-card'>"
+    "<div style='display:flex;align-items:center;gap:0.6rem;margin-bottom:0.6rem;'>"
+    "<span style='font-size:1.6rem;'>🌿</span>"
+    "<div><div style='font-size:1.4rem;font-weight:650;'>PeakGuard AI – Smart Green Building Forecaster</div>"
+    "<div style='font-size:0.9rem;opacity:0.8;'>Forecast peaks, test solar & quantify CO₂ savings in seconds.</div></div>"
+    "</div>"
+    "</div>",
+    unsafe_allow_html=True,
+)
 
-    # Default to "now" but allow manual override
-    today = datetime.date.today()
-    col_date, col_time = st.columns(2)
-    with col_date:
-        date_selected = st.date_input("Date", value=today)
-    with col_time:
-        default_time = datetime.time(
-            hour=st.session_state.get("live_hour", 14), minute=0
-        )
-        time_selected = st.time_input("Hour of day", value=default_time, step=3600)
+st.markdown("## ⚡ Forecast & scenarios")
 
-    # Convert to model inputs
-    hour = time_selected.hour
-    day_of_week = date_selected.weekday()  # Monday=0
-    month = date_selected.month
+with st.container():
+    st.markdown(
+        "<div class='section-title'>Set operating conditions</div>"
+        "<div class='section-subtitle'>Choose the hour you care about and how the building is behaving right now.</div>",
+        unsafe_allow_html=True,
+    )
 
-    col_temp, col_lag1, col_lag24 = st.columns(3)
+    with st.form("forecast_form"):
+        col_date, col_time = st.columns([2, 1])
+        with col_date:
+            target_date = st.date_input(
+                "Date",
+                value=dt.date.today(),
+                key="in_date",
+            )
+        with col_time:
+            target_time = st.time_input(
+                "Hour of day",
+                value=dt.time(hour=14, minute=0),
+                key="in_time",
+            )
 
-    with col_temp:
-        default_temp = st.session_state.get("live_air_temp", 25.0)
-        air_temp = st.number_input(
+        col_temp, col_lag1, col_lag24 = st.columns(3)
+
+        manual_air_temp = col_temp.number_input(
             "Outdoor air temperature (°C)",
             min_value=-30.0,
             max_value=50.0,
-            value=float(default_temp),
+            value=25.0,
             step=0.5,
+            key="in_air_temp_manual",
         )
 
-    with col_lag1:
-        lag1 = st.number_input(
+        lag1 = col_lag1.number_input(
             "Energy 1 hour ago (kWh)",
             min_value=0.0,
-            max_value=20000.0,
-            value=100.0,
+            max_value=100_000.0,
+            value=850.0,
             step=10.0,
-            help="Use last hour's meter reading.",
+            key="in_lag1",
         )
 
-    with col_lag24:
-        lag24 = st.number_input(
+        lag24 = col_lag24.number_input(
             "Energy 24 hours ago (kWh)",
             min_value=0.0,
-            max_value=20000.0,
-            value=110.0,
+            max_value=100_000.0,
+            value=800.0,
             step=10.0,
-            help="Same hour, previous day.",
+            key="in_lag24",
         )
 
-    st.markdown("")
+        run_btn = st.form_submit_button("Run forecast & scenario analysis")
 
-    run_btn = st.button("🔮 Run forecast & scenario analysis")
+# ---------------------------------------------------------
+# 7. RUN PREDICTION
+# ---------------------------------------------------------
+if run_btn:
+    # Combine date + time
+    target_dt = dt.datetime.combine(target_date, target_time)
+    hour = target_dt.hour
+    day_of_week = target_dt.weekday()  # 0=Mon ... 6=Sun
+    month = target_dt.month
 
-    if run_btn:
-        # ---------------- PREDICTION ----------------
-        features_df = create_features_from_input(
-            air_temp=air_temp,
-            hour=hour,
-            day_of_week=day_of_week,
-            month=month,
-            primary_use=primary_use,
-            square_feet=square_feet,
-            year_built=year_built,
-            lag1=lag1,
-            lag24=lag24,
-        )
-
-        pred_log = model.predict(features_df)[0]
-        pred_kwh = float(np.expm1(pred_log))  # model predicted log(1 + kWh)
-
-        # For 1-hour window, kW ≈ kWh
-        predicted_demand_kw = pred_kwh
-
-        # ---------------- SOLAR + CO₂ ----------------
-        solar_gen_kwh = estimate_solar_generation_kwh(solar_capacity_kw, hour)
-
-        grid_kwh_no_solar = pred_kwh
-        grid_kwh_with_solar = max(0.0, pred_kwh - solar_gen_kwh)
-
-        co2_no_solar = compute_co2(grid_kwh_no_solar, emission_factor)
-        co2_with_solar = compute_co2(grid_kwh_with_solar, emission_factor)
-        co2_savings = co2_no_solar - co2_with_solar
-
-        # ---------------- CONTRACT PEAK STATUS ----------------
-        if contract_peak_limit > 0:
-            margin_kw = contract_peak_limit - predicted_demand_kw
-            if margin_kw >= 50:
-                peak_status = "SAFE"
-                peak_color = "✅"
-                peak_msg = "Comfortable margin below contract peak."
-            elif 0 <= margin_kw < 50:
-                peak_status = "AT RISK"
-                peak_color = "🟡"
-                peak_msg = "Close to contract limit – consider pre-cooling or shifting loads."
-            else:
-                peak_status = "BREACH"
-                peak_color = "🚨"
-                peak_msg = "Forecast exceeds contract peak – high demand charges likely."
-        else:
-            peak_status = "N/A"
-            peak_color = "ℹ️"
-            peak_msg = "No contract peak limit specified."
-
-        # ---------------- METRICS ROW ----------------
-        st.markdown("### Results")
-
-        m1, m2, m3 = st.columns(3)
-        m1.metric(
-            "Predicted consumption (next hour)",
-            f"{pred_kwh:,.2f} kWh",
-        )
-
-        if contract_peak_limit > 0:
-            delta_kw = predicted_demand_kw - contract_peak_limit
-            m2.metric(
-                f"Contract peak status – {peak_color} {peak_status}",
-                f"{predicted_demand_kw:,.1f} kW",
-                f"{delta_kw:+.1f} kW vs limit",
+    # Live weather override if enabled
+    if use_live_weather:
+        live_temp = fetch_live_temperature(latitude, longitude, target_dt)
+        if live_temp is not None:
+            air_temp = live_temp
+            st.info(
+                f"🌤️ Using live weather: {air_temp:.1f} °C from Open-Meteo for "
+                f"{target_dt.strftime('%Y-%m-%d %H:00')} at ({latitude:.2f}, {longitude:.2f})."
             )
         else:
-            m2.metric("Contract peak status", "No limit set")
+            air_temp = manual_air_temp
+            st.warning(
+                "Live weather API call failed – falling back to manual temperature input.",
+                icon="⚠️",
+            )
+    else:
+        air_temp = manual_air_temp
 
-        m3.metric(
-            "Solar generation (this hour, est.)",
-            f"{solar_gen_kwh:,.2f} kWh",
+    # Build feature row and predict
+    feature_row = build_feature_row(
+        air_temp=air_temp,
+        hour=hour,
+        day_of_week=day_of_week,
+        month=month,
+        primary_use=primary_use,
+        square_feet=square_feet,
+        year_built=year_built,
+        lag1=lag1,
+        lag24=lag24,
+    )
+
+    log_pred = model.predict(feature_row)
+    pred_kwh = float(np.expm1(log_pred[0]))
+
+    # Scenario calculations
+    solar_kwh = estimate_solar_generation_kw(onsite_solar_kw, hour)
+    grid_without_solar_kwh = pred_kwh
+    grid_with_solar_kwh = max(0.0, pred_kwh - solar_kwh)
+
+    co2_without_solar = grid_without_solar_kwh * grid_emission_factor
+    co2_with_solar = grid_with_solar_kwh * grid_emission_factor
+    co2_avoided = co2_without_solar - co2_with_solar
+
+    peak_status, delta_kw = classify_peak_status(pred_kwh, contract_peak_limit_kw)
+
+    # -----------------------------------------------------
+    # RESULTS – TOP METRICS
+    # -----------------------------------------------------
+    st.markdown("## Results")
+
+    m1, m2, m3 = st.columns(3)
+    with m1:
+        st.metric(
+            label="Predicted consumption (next hour)",
+            value=f"{pred_kwh:,.2f} kWh",
+        )
+    with m2:
+        status_delta = (
+            f"+{delta_kw:,.1f} kW vs limit" if delta_kw > 0 else f"{abs(delta_kw):,.1f} kW headroom"
+        )
+        st.metric(
+            label=f"Contract peak status – {'🚨' if 'BREACH' in peak_status else '✅'} {peak_status}",
+            value=f"{pred_kwh:,.1f} kW",
+            delta=status_delta if contract_peak_limit_kw > 0 else None,
+        )
+    with m3:
+        st.metric(
+            label="Solar generation (this hour, est.)",
+            value=f"{solar_kwh:,.2f} kWh",
         )
 
-        st.markdown("---")
-
-        # ---------------- CO2 + SCENARIO SUMMARY ----------------
-        c1, c2, c3 = st.columns(3)
-        c1.metric(
-            "Grid energy – without solar",
-            f"{grid_kwh_no_solar:,.2f} kWh",
-        )
-        c2.metric(
-            "Grid energy – with solar",
-            f"{grid_kwh_with_solar:,.2f} kWh",
-            f"{grid_kwh_with_solar - grid_kwh_no_solar:+.2f} kWh",
-        )
-        c3.metric(
-            "CO₂ avoided this hour",
-            f"{co2_savings:,.2f} kg",
-        )
-
-        # Short narrative for judges
+    # -----------------------------------------------------
+    # GRID VS SOLAR + CO2
+    # -----------------------------------------------------
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown("#### Grid energy – without solar")
         st.markdown(
-            f"""
-            **What this scenario shows:**
-
-            - For **{date_selected} at {hour:02d}:00**, PeakGuard AI forecasts **~{pred_kwh:,.0f} kWh**.
-            - With your contract limit of **{contract_peak_limit:,.0f} kW**, status is **{peak_color} {peak_status}** – {peak_msg}
-            - With **{solar_capacity_kw:,.0f} kW** solar, the model estimates **{solar_gen_kwh:,.1f} kWh** on-site generation this hour.
-            - That cuts grid draw from **{grid_kwh_no_solar:,.1f} → {grid_kwh_with_solar:,.1f} kWh**, avoiding **~{co2_savings:,.1f} kg CO₂** in just one hour.
-            """
+            f"<div class='sub-card'><span style='font-size:1.6rem;font-weight:650;'>{grid_without_solar_kwh:,.2f} kWh</span>"
+            f"<div style='font-size:0.85rem;opacity:0.8;'>Baseline forecast if the site had no solar.</div></div>",
+            unsafe_allow_html=True,
         )
 
+    with c2:
+        st.markdown("#### Grid energy – with solar")
+        delta_grid = grid_with_solar_kwh - grid_without_solar_kwh
+        st.markdown(
+            f"<div class='sub-card'><span style='font-size:1.6rem;font-weight:650;'>{grid_with_solar_kwh:,.2f} kWh</span>"
+            f"<div style='font-size:0.85rem;opacity:0.8;'>After applying on-site solar for this hour.</div>"
+            f"<div style='margin-top:0.3rem;font-size:0.8rem;color:#8bffd1;'>"
+            f"{'↓' if delta_grid < 0 else '→'} {abs(delta_grid):,.2f} kWh vs. no-solar baseline\"</div></div>",
+            unsafe_allow_html=True,
+        )
 
-# ---------------------------------------------------------
-# TAB 2 – HOW TO USE (FOR YOU + JUDGES)
-# ---------------------------------------------------------
-with tab_howto:
+    with c3:
+        st.markdown("#### CO₂ avoided this hour")
+        st.markdown(
+            f"<div class='sub-card'><span style='font-size:1.6rem;font-weight:650;'>{max(co2_avoided,0):,.2f} kg</span>"
+            f"<div style='font-size:0.85rem;opacity:0.8;'>Emissions avoided by using on-site solar instead of grid.</div></div>",
+            unsafe_allow_html=True,
+        )
+
+    # -----------------------------------------------------
+    # LINE CHART – LAST 24H, LAST HOUR, FORECAST
+    # -----------------------------------------------------
+    st.markdown("#### Trend view – recent & forecasted load")
+
+    chart_df = pd.DataFrame(
+        {
+            "Point": ["24 hours ago", "1 hour ago", "Next hour (forecast)"],
+            "Energy (kWh)": [lag24, lag1, pred_kwh],
+        }
+    )
+
+    # Use Altair (bundled with Streamlit) for a clean line chart
+    import altair as alt
+
+    line_chart = (
+        alt.Chart(chart_df)
+        .mark_line(point=True)
+        .encode(
+            x=alt.X("Point", sort=None, title="Time reference"),
+            y=alt.Y("Energy (kWh)", title="Energy"),
+            tooltip=["Point", alt.Tooltip("Energy (kWh)", format=".2f")],
+        )
+        .properties(height=260)
+    )
+
+    st.altair_chart(line_chart, use_container_width=True)
+
+    # -----------------------------------------------------
+    # NARRATIVE + AI RECOMMENDATIONS
+    # -----------------------------------------------------
+    st.markdown("### What this scenario shows")
+
+    bullet_lines = [
+        f"For **{target_dt.strftime('%Y-%m-%d')} at {hour:02d}:00**, "
+        f"PeakGuard AI forecasts **~{pred_kwh:,.1f} kWh**.",
+    ]
+
+    if contract_peak_limit_kw > 0:
+        if "BREACH" in peak_status:
+            bullet_lines.append(
+                f"With your contract limit of **{contract_peak_limit_kw:,.1f} kW**, "
+                f"status is **🚨 BREACH** – forecast exceeds contract peak by "
+                f"~**{delta_kw:,.1f} kW**; high demand charges are likely."
+            )
+        else:
+            bullet_lines.append(
+                f"With your contract limit of **{contract_peak_limit_kw:,.1f} kW**, "
+                f"status is **✅ SAFE**, with about **{abs(delta_kw):,.1f} kW** headroom."
+            )
+
+    if onsite_solar_kw > 0:
+        bullet_lines.append(
+            f"With **{onsite_solar_kw:,.0f} kW** of solar, the model estimates ~**{solar_kwh:,.1f} kWh** "
+            f"on-site generation this hour."
+        )
+        bullet_lines.append(
+            f"That cuts grid draw from **{grid_without_solar_kwh:,.1f} → {grid_with_solar_kwh:,.1f} kWh**, "
+            f"avoiding about **{max(co2_avoided,0):,.1f} kg CO₂** in just one hour."
+        )
+
     st.markdown(
-        """
-        ### How to operate the app
+        "<ul>" + "".join([f"<li>{line}</li>" for line in bullet_lines]) + "</ul>",
+        unsafe_allow_html=True,
+    )
 
-        **Step 1 – Set the building context (left sidebar)**  
-        - Choose *Primary building use* (Office, Education, Healthcare, etc.)  
-        - Enter floor area and year built.  
-        - Set **Contract Peak Limit (kW)** from your utility bill.  
-        - Add **solar capacity** if the building has rooftop PV.  
-        - Set a realistic **grid emission factor** (0.7–0.9 for India is typical).
+    # AI Recommendations box
+    recs = generate_ai_recommendations(
+        status=peak_status,
+        delta_kw=delta_kw,
+        solar_kw=solar_kwh,
+        grid_without_solar_kwh=grid_without_solar_kwh,
+        grid_with_solar_kwh=grid_with_solar_kwh,
+        co2_avoided_kg=co2_avoided,
+    )
 
-        **Step 2 – Pull live conditions (optional, but impressive)**  
-        - Turn on **“Use real-time weather API”**.  
-        - Enter latitude & longitude for the campus or building.  
-        - Click **“Fetch current weather”** – this will auto-fill temperature & time.
+    st.markdown("### 🤖 AI recommendations for this hour")
 
-        **Step 3 – Configure the operating scenario**  
-        - In the *Forecast & Scenarios* tab:
-          - Adjust **Date** and **Hour** you want to simulate (e.g., 15:00 today).  
-          - Provide **Energy 1 hour ago** and **24 hours ago** from the meter or from a realistic assumption.
+    st.markdown(
+        "<div class='sub-card ai-rec'><ul>"
+        + "".join([f"<li>{r}</li>" for r in recs])
+        + "</ul></div>",
+        unsafe_allow_html=True,
+    )
 
-        **Step 4 – Run the AI forecast**  
-        - Click **“Run forecast & scenario analysis”**.  
-        - The app will:
-          1. Engineer all time + weather features.
-          2. Use your trained LightGBM model to predict next-hour consumption.
-          3. Compare it with your **contract peak**.
-          4. Estimate **solar generation** and **CO₂ savings**.
-
-        **How this makes you stand out in competition:**
-        - Not just forecasting – you are **connecting AI → cost → CO₂ → solar** in one screen.  
-        - You show **“What if?” scenarios** for:
-          - Different times of day  
-          - With/without solar  
-          - Different contract peak limits  
-
-        Structure your pitch like this:
-        1. *“PeakGuard AI predicts dangerous peaks **before** they happen.”*
-        2. *“We integrate solar and emissions so facility managers see both **money** and **carbon** impact.”*
-        3. *“This is plug-and-play for any commercial building with smart meters and basic weather data.”*
-        """
+else:
+    st.markdown(
+        "<div class='section-subtitle' style='margin-top:0.6rem;'>"
+        "Set your conditions on the left and above, then click "
+        "<strong>Run forecast & scenario analysis</strong> to see peaks, solar impact and CO₂ savings."
+        "</div>",
+        unsafe_allow_html=True,
     )
